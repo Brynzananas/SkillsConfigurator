@@ -93,7 +93,7 @@ namespace SkillsConfigurator
             List<ConfigEntryBase> configEntryBases = [];
             skillConfigs.Add(skillDef, configEntryBases);
             yield return null;
-            ConfigEntry<bool> enable = CreateConfig(sectionName, "Enable Config", false, "Enable configuration for this skill?", configEntryBases, false);
+            ConfigEntry<bool> enable = CreateConfig(sectionName, "Enable Config", false, "Enable configuration for this skill?", null, false);
             if (enable.Value)
             {
                 yield return null;
@@ -107,9 +107,9 @@ namespace SkillsConfigurator
                 yield return null;
                 ConfigEntry<int> stockToConsume = CreateConfig(sectionName, "Stock To Consume", skillDef.stockToConsume, "How much stock to deduct when the skill is activated.", configEntryBases, true);
                 yield return null;
-                ConfigEntry<bool> attackSpeedBuffsRestockSpeed = CreateConfig(sectionName, "Attack Speed Buffs Testock Speed", skillDef.attackSpeedBuffsRestockSpeed, "Makes the skill restock interval divided by attack speed if checked.", configEntryBases, true);
+                ConfigEntry<bool> attackSpeedBuffsRestockSpeed = CreateConfig(sectionName, "Attack Speed Buffs Restock Speed", skillDef.attackSpeedBuffsRestockSpeed, "Makes the skill restock interval divided by attack speed if checked.", configEntryBases, true);
                 yield return null;
-                ConfigEntry<float> attackSpeedBuffsRestockSpeed_Multiplier = CreateConfig(sectionName, "Attack Speed Buffs Testock Speed Multiplier", skillDef.attackSpeedBuffsRestockSpeed_Multiplier, "Increases the efficacy of attack speed on restock time.", configEntryBases, true);
+                ConfigEntry<float> attackSpeedBuffsRestockSpeed_Multiplier = CreateConfig(sectionName, "Attack Speed Buffs Restock Speed Multiplier", skillDef.attackSpeedBuffsRestockSpeed_Multiplier, "Increases the efficacy of attack speed on restock time.", configEntryBases, true);
                 yield return null;
                 ConfigEntry<bool> resetCooldownTimerOnUse = CreateConfig(sectionName, "Reset Cooldown Timer On Use", skillDef.resetCooldownTimerOnUse, "Whether or not it resets any progress on cooldowns.", configEntryBases, true);
                 yield return null;
@@ -191,7 +191,7 @@ namespace SkillsConfigurator
             ConfigDefinition configDefinition = new ConfigDefinition(section, key);
             ConfigDescription configDescription = new ConfigDescription(description);
             ConfigEntry<T> entry = configFile.Bind(configDefinition, defaultValue, configDescription);
-            configEntryBases.Add(entry);
+            configEntryBases?.Add(entry);
             if (enableRiskOfOptions && riskOfOptionsEnabled) ModCompatabilities.RiskOfOptionsCompatability.AddConfig(entry);
             return entry;
         }
