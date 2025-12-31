@@ -32,31 +32,93 @@ namespace SkillsConfigurator
     {
         public const string ModGuid = "com.brynzananas.skillsconfigurator";
         public const string ModName = "Skills Configurator";
-        public const string ModVer = "1.0.0";
+        public const string ModVer = "1.1.0";
         public static bool riskOfOptionsEnabled { get; private set; }
         public static ConfigFile configFile { get; private set; }
         public static ManualLogSource Log { get; private set; }
         public static Dictionary<SkillDef, List<ConfigEntryBase>> skillConfigs = [];
         public static Dictionary<string, int> names = [];
+        public static Dictionary<SkillDef, string> skillToNewName = [];
+        private static bool _debug;
+        public static bool debug
+        {
+            get => _debug;
+            set
+            {
+                if (value == _debug) return;
+                _debug = value;
+                if (value)
+                {
+                    On.RoR2.Loadout.BodyLoadoutManager.SetSkillVariant += BodyLoadoutManager_SetSkillVariant;
+                }
+                else
+                {
+                    On.RoR2.Loadout.BodyLoadoutManager.SetSkillVariant -= BodyLoadoutManager_SetSkillVariant;
+                }
+            }
+        }
         private static Stopwatch stopwatch;
         public void Awake()
         {
             configFile = Config;
             Log = Logger;
             riskOfOptionsEnabled = BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(ModCompatabilities.RiskOfOptionsCompatability.GUID);
-            
         }
-        /*[ConCommand(commandName = "regenerate_skill_configs", flags = ConVarFlags.None)]
+        public void OnDestroy()
+        {
+            debug = false;
+        }
+
+        private static void BodyLoadoutManager_SetSkillVariant(On.RoR2.Loadout.BodyLoadoutManager.orig_SetSkillVariant orig, Loadout.BodyLoadoutManager self, BodyIndex bodyIndex, int skillSlot, uint skillVariant)
+        {
+            orig(self, bodyIndex, skillSlot, skillVariant);
+            if (skillSlot < 0 || skillVariant < 0) return;
+            int index = (int)bodyIndex;
+            if (index < 0 || index >= Loadout.BodyLoadoutManager.allBodyInfos.Length) return;
+            GenericSkill[] genericSkills = Loadout.BodyLoadoutManager.allBodyInfos[index].prefabSkillSlots;
+            if (genericSkills == null || skillSlot >= genericSkills.Length) return;
+            GenericSkill genericSkill = genericSkills[skillSlot];
+            if (!genericSkill) return;
+            SkillFamily skillFamily = genericSkill.skillFamily;
+            if (!skillFamily || skillVariant >= skillFamily.variants.Length) return;
+            SkillDef skillDef = skillFamily.variants[skillVariant].skillDef;
+            if (!skillDef) return;
+            string skillName;
+            if (skillToNewName.ContainsKey(skillDef))
+            {
+                skillName = skillToNewName[skillDef];
+            }
+            else
+            {
+                skillName = (skillDef as ScriptableObject).name;
+            }
+            Log.LogMessage("Selected skill: \"" + skillName + "\" AKA \"" + skillDef.skillName + "\" and \"" + Language.GetString(skillDef.skillNameToken) + "\"");
+        }
+        [ConCommand(commandName = "skillconfigurator_debug", flags = ConVarFlags.None)]
         public static void CCReset(ConCommandArgs args)
         {
-            Reset();
+            debug = args.GetArgBool(0);
+            if (debug)
+            {
+                Log.LogMessage("Enabled debug");
+            }
+            else
+            {
+                Log.LogMessage("Disabled debug");
+            }
         }
-        public static void Reset()
-        {
-            skillConfigs.Clear();
-            names.Clear();
-            ConfigureSkillsStart();
-        }*/
+
+        /*[ConCommand(commandName = "regenerate_skill_configs", flags = ConVarFlags.None)]
+public static void CCReset(ConCommandArgs args)
+{
+   Reset();
+}
+public static void Reset()
+{
+   skillConfigs.Clear();
+   names.Clear();
+   ConfigureSkillsStart();
+}*/
         [SystemInitializer(typeof(SkillCatalog))]
         private static void ConfigureSkillsStart()
         {
@@ -78,22 +140,42 @@ namespace SkillsConfigurator
             }
             RoR2Application.instance.StartCoroutine(runLoadCoroutine());
         }
-        private static IEnumerator ConfigureSkillThread(SkillDef skillDef, int loc)
+        private static string HandleString(string @string)
         {
-            string sectionName = (skillDef as ScriptableObject).name;
-            if (sectionName.IsNullOrWhiteSpace()) yield break;
+            if (@string.IsNullOrWhiteSpace()) return @string;
+            char[] forbiddenCharacters = { '\n', '\t', '\"', '\'', '[', ']' };
+            foreach (char forbiddenCharacter in forbiddenCharacters)
+            {
+                while (@string.Contains(forbiddenCharacter))
+                {
+                    @string = @string.Replace(forbiddenCharacter, ' ');
+                }
+            }
+            @string.Trim();
             int namesCount = 0;
-            while (names.ContainsKey(sectionName + (namesCount == 0 ? "" : namesCount)))
+            while (names.ContainsKey(@string + (namesCount == 0 ? "" : namesCount)))
             {
                 namesCount++;
             }
-            sectionName += (namesCount == 0 ? "" : namesCount);
-            names.Add(sectionName, namesCount);
+            @string += (namesCount == 0 ? "" : namesCount);
+            names.Add(@string, namesCount);
+            return @string;
+        }
+        private static IEnumerator ConfigureSkillThread(SkillDef skillDef, int loc)
+        {
+            string sectionName = (skillDef as ScriptableObject).name;
+            sectionName = HandleString(sectionName);
+            if (sectionName.IsNullOrWhiteSpace())
+            {
+                sectionName = HandleString(skillDef.skillName);
+            }
+            if (sectionName.IsNullOrWhiteSpace()) yield break;
             if (skillConfigs.ContainsKey(skillDef)) yield break;
+            skillToNewName.Add(skillDef, sectionName);
             List<ConfigEntryBase> configEntryBases = [];
             skillConfigs.Add(skillDef, configEntryBases);
             yield return null;
-            ConfigEntry<bool> enable = CreateConfig(sectionName, "Enable Config", false, "Enable configuration for this skill?", null, false);
+            ConfigEntry<bool> enable = CreateConfig(sectionName, "Enable Config", false, "Enable configuration for this skill? AKA \"" + skillDef.skillName + "\" and \"" + Language.GetString(skillDef.skillNameToken) + "\"", null, false);
             if (enable.Value)
             {
                 yield return null;
